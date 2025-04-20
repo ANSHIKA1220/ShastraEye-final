@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ShastraEye Surveillance</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Orbitron', sans-serif;
+    }
+  </style>
+</head>
+
+<body class="bg-gray-950 text-white min-h-screen flex flex-col items-center justify-center p-6">
+  <header class="mb-6 text-center">
+    <h1 class="text-4xl md:text-5xl font-bold text-cyan-400 drop-shadow-lg">🔰 ShastraEye</h1>
+    <p class="text-lg text-gray-400 mt-2">Real-Time Weapon & Fight Detection Surveillance</p>
+  </header>
+
+  <main class="w-full max-w-5xl grid md:grid-cols-2 gap-8 items-start">
+    <!-- Webcam Feed -->
+    <div class="relative">
+      <video id="video" autoplay playsinline class="w-full rounded-2xl shadow-xl border-2 border-cyan-400"></video>
+      <canvas id="canvas" class="hidden"></canvas>
+    </div>
+
+    <!-- Prediction Panel -->
+    <div class="space-y-6">
+      <div class="bg-gray-800 rounded-xl p-6 shadow-md border-l-4 border-yellow-500">
+        <h2 class="text-xl mb-2 font-semibold">🥊 Fight Detection</h2>
+        <p id="fight" class="text-2xl text-yellow-300">Loading...</p>
+      </div>
+
+      <div class="bg-gray-800 rounded-xl p-6 shadow-md border-l-4 border-red-500">
+        <h2 class="text-xl mb-2 font-semibold">🔫 Weapon Detection</h2>
+        <p id="weapon" class="text-2xl text-red-400">Loading...</p>
+      </div>
+
+      <div class="bg-gray-700 rounded-xl p-4 text-sm text-gray-300">
+        <p><span class="font-bold">Status:</span> <span id="status" class="text-cyan-300">Connecting...</span></p>
+        <p class="mt-1"><span class="font-bold">FPS:</span> <span id="fps" class="text-green-400">0</span></p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const fight = document.getElementById("fight");
+    const weapon = document.getElementById("weapon");
+    const status = document.getElementById("status");
+    const fps = document.getElementById("fps");
+
+    let lastTime = performance.now();
+
+    const socket = new WebSocket("ws://localhost:8000/ws");
+    socket.onopen = () => (status.textContent = "🟢 Connected");
+    socket.onclose = () => (status.textContent = "🔴 Disconnected");
+
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      fight.textContent = data.fight;
+      weapon.textContent = data.weapon;
+      const now = performance.now();
+      const frameTime = now - lastTime;
+      fps.textContent = (1000 / frameTime).toFixed(1);
+      lastTime = now;
+    };
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then((stream) => {
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+
+          const ctx = canvas.getContext("2d");
+          setInterval(() => {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob((blob) => {
+              if (blob && socket.readyState === WebSocket.OPEN) {
+                socket.send(blob);
+              }
+            }, "image/jpeg");
+          }, 100);
+        };
+      })
+      .catch((err) => {
+        console.error("Error accessing webcam:", err);
+        status.textContent = "❌ Camera Access Denied";
+      });
+  </script>
+</body>
+
+</html>
